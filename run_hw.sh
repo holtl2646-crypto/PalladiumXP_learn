@@ -1,9 +1,9 @@
 ﻿#!/usr/bin/env bash
 set -o pipefail
 
-TOP="${TOP:-tb_sc_idu_to_fxu}"
+TOP="${TOP:-tb_sc_idu_to_fxu_smoke}"
 FILELIST="${FILELIST:-filelist}"
-TB_FILE="${TB_FILE:-tb_sc_idu_to_fxu.sv}"
+TB_FILE="${TB_FILE:-tb_sc_idu_to_fxu_smoke.v}"
 DEFINE_ARGS="${DEFINE_ARGS:-+define+PIPE_INFO_FOR_TEST}"
 EXTRA_ARGS="${EXTRA_ARGS:-}"
 RUN_ARGS="${RUN_ARGS:-}"
@@ -23,8 +23,8 @@ if [ "$clean_status" -ne 0 ]; then
     exit "$clean_status"
 fi
 
-echo "[HW] Compile/elaborate for hardware: TOP=$TOP FILELIST=$FILELIST TB_FILE=$TB_FILE"
-/usr/bin/time -p irun -hw -ua -sv "$TB_FILE" +dut+sc_idu_to_fxu -f "$FILELIST" -top "$TOP" $DEFINE_ARGS $EXTRA_ARGS \
+echo "[HW] Compile/elaborate only for hardware: TOP=$TOP FILELIST=$FILELIST TB_FILE=$TB_FILE"
+/usr/bin/time -p irun -elaborate -hw -ua -sv +incdir+. "$TB_FILE" +dut+sc_idu_to_fxu -f "$FILELIST" -top "$TOP" $DEFINE_ARGS $EXTRA_ARGS \
     2>&1 | tee "$LOG_DIR/compile_hw.log"
 
 compile_status=${PIPESTATUS[0]}

@@ -1,11 +1,38 @@
 ﻿`timescale 1ns/1ps
 `include "springcore_pkg.v"
-`include "tb_fxu_opcode_map.svh"
+
+// Default opcode placeholders. Override them with plusargs such as:
+//   +tb_op_fadd_s=01 +tb_op_fsub_s=02 +tb_op_fmul_s=03
+`ifndef TB_OP_FADD_S
+`define TB_OP_FADD_S 0
+`endif
+`ifndef TB_OP_FSUB_S
+`define TB_OP_FSUB_S 0
+`endif
+`ifndef TB_OP_FMUL_S
+`define TB_OP_FMUL_S 0
+`endif
+`ifndef TB_OP_FEQ_S
+`define TB_OP_FEQ_S 0
+`endif
+`ifndef TB_OP_FLT_S
+`define TB_OP_FLT_S 0
+`endif
+`ifndef TB_OP_FLE_S
+`define TB_OP_FLE_S 0
+`endif
+`ifndef TB_ROUND_RNE
+`define TB_ROUND_RNE 0
+`endif
 
 module tb_sc_idu_to_fxu;
 
-  localparam int CLK_PERIOD_NS = 10;
-  localparam int DEFAULT_TIMEOUT_CYCLES = 1000000;
+  initial begin
+    $display("[TB] tb_sc_idu_to_fxu version 2026-06-03-legacy-compat-2");
+  end
+
+  localparam CLK_PERIOD_NS = 10;
+  localparam DEFAULT_TIMEOUT_CYCLES = 1000000;
 
   reg i_clk;
   reg i_reset_n;
@@ -54,7 +81,8 @@ module tb_sc_idu_to_fxu;
   integer timeout_cycles;
   integer num_ops;
   integer seed;
-  string case_name;
+  integer plusarg_found;
+  reg [8*32-1:0] case_name;
 
   reg [`FXU_OPCD_WIDTH-1:0] op_fadd_s;
   reg [`FXU_OPCD_WIDTH-1:0] op_fsub_s;
@@ -130,17 +158,17 @@ module tb_sc_idu_to_fxu;
     op_fle_s = `TB_OP_FLE_S;
     round_rne = `TB_ROUND_RNE;
 
-    void'($value$plusargs("case=%s", case_name));
-    void'($value$plusargs("num_ops=%d", num_ops));
-    void'($value$plusargs("seed=%d", seed));
-    void'($value$plusargs("timeout_cycles=%d", timeout_cycles));
-    void'($value$plusargs("tb_op_fadd_s=%h", op_fadd_s));
-    void'($value$plusargs("tb_op_fsub_s=%h", op_fsub_s));
-    void'($value$plusargs("tb_op_fmul_s=%h", op_fmul_s));
-    void'($value$plusargs("tb_op_feq_s=%h", op_feq_s));
-    void'($value$plusargs("tb_op_flt_s=%h", op_flt_s));
-    void'($value$plusargs("tb_op_fle_s=%h", op_fle_s));
-    void'($value$plusargs("tb_round_rne=%h", round_rne));
+    plusarg_found = $value$plusargs("case=%s", case_name);
+    plusarg_found = $value$plusargs("num_ops=%d", num_ops);
+    plusarg_found = $value$plusargs("seed=%d", seed);
+    plusarg_found = $value$plusargs("timeout_cycles=%d", timeout_cycles);
+    plusarg_found = $value$plusargs("tb_op_fadd_s=%h", op_fadd_s);
+    plusarg_found = $value$plusargs("tb_op_fsub_s=%h", op_fsub_s);
+    plusarg_found = $value$plusargs("tb_op_fmul_s=%h", op_fmul_s);
+    plusarg_found = $value$plusargs("tb_op_feq_s=%h", op_feq_s);
+    plusarg_found = $value$plusargs("tb_op_flt_s=%h", op_flt_s);
+    plusarg_found = $value$plusargs("tb_op_fle_s=%h", op_fle_s);
+    plusarg_found = $value$plusargs("tb_round_rne=%h", round_rne);
 
     $display("[TB] case=%s num_ops=%0d seed=%0d timeout_cycles=%0d", case_name, num_ops, seed, timeout_cycles);
     $display("[TB] opcodes fadd=%0h fsub=%0h fmul=%0h feq=%0h flt=%0h fle=%0h round_rne=%0h",
@@ -171,7 +199,7 @@ module tb_sc_idu_to_fxu;
       $finish;
     end else begin
       $display("[TB][FAIL] error_count=%0d", error_count);
-      $fatal(1);
+      $finish;
     end
   end
 
@@ -179,7 +207,7 @@ module tb_sc_idu_to_fxu;
     #1;
     repeat (timeout_cycles) @(posedge i_clk);
     $display("[TB][ERROR] Global watchdog timeout");
-    $fatal(2);
+    $finish;
   end
 
   always @(posedge i_clk) begin
@@ -205,19 +233,19 @@ module tb_sc_idu_to_fxu;
   task init_inputs;
     begin
       i_reset_n = 1'b0;
-      i_fxu_idu_opcd = '0;
-      i_fxu_idu_round = '0;
-      i_fxu_idu_conv_fma_vld = '0;
+      i_fxu_idu_opcd = {`FXU_OPCD_WIDTH{1'b0}};
+      i_fxu_idu_round = {`FXU_ROUND_WIDTH{1'b0}};
+      i_fxu_idu_conv_fma_vld = {`FXU_SUBMODULE_VLD_WIDTH{1'b0}};
       i_fxu_idu_opcd_vld = 1'b0;
-      i_fxu_idu_oprd1 = '0;
-      i_fxu_idu_oprd2 = '0;
-      i_fxu_idu_oprd3 = '0;
-      i_fxu_idu_waddr = '0;
+      i_fxu_idu_oprd1 = {`FXU_DATA_WIDTH{1'b0}};
+      i_fxu_idu_oprd2 = {`FXU_DATA_WIDTH{1'b0}};
+      i_fxu_idu_oprd3 = {`FXU_DATA_WIDTH{1'b0}};
+      i_fxu_idu_waddr = {`FXU_WADDR_WIDTH{1'b0}};
 `ifdef PIPE_INFO_FOR_TEST
-      i_idu_pc = '0;
+      i_idu_pc = {`FXU_PC_WIDTH{1'b0}};
 `endif
 `ifdef TMU32
-      i_fxu_idu_uimm1_en = '0;
+      i_fxu_idu_uimm1_en = {`FXU_UIMM1_EN_WIDTH{1'b0}};
 `endif
     end
   endtask
@@ -235,7 +263,7 @@ module tb_sc_idu_to_fxu;
     integer i;
     begin
       i_fxu_idu_opcd_vld <= 1'b0;
-      i_fxu_idu_conv_fma_vld <= '0;
+      i_fxu_idu_conv_fma_vld <= {`FXU_SUBMODULE_VLD_WIDTH{1'b0}};
       for (i = 0; i < cycles; i = i + 1) begin
         @(posedge i_clk);
       end
@@ -259,12 +287,12 @@ module tb_sc_idu_to_fxu;
       i_fxu_idu_oprd3 <= oprd3;
       i_fxu_idu_waddr <= waddr;
 `ifdef PIPE_INFO_FOR_TEST
-      i_idu_pc <= i_idu_pc + 'd4;
+      i_idu_pc <= i_idu_pc + 4;
 `endif
       issued_count = issued_count + 1;
       @(posedge i_clk);
       i_fxu_idu_opcd_vld <= 1'b0;
-      i_fxu_idu_conv_fma_vld <= '0;
+      i_fxu_idu_conv_fma_vld <= {`FXU_SUBMODULE_VLD_WIDTH{1'b0}};
     end
   endtask
 
@@ -285,12 +313,12 @@ module tb_sc_idu_to_fxu;
       i_fxu_idu_oprd3 <= oprd3;
       i_fxu_idu_waddr <= waddr;
 `ifdef PIPE_INFO_FOR_TEST
-      i_idu_pc <= i_idu_pc + 'd4;
+      i_idu_pc <= i_idu_pc + 4;
 `endif
       issued_count = issued_count + 1;
       @(posedge i_clk);
       i_fxu_idu_opcd_vld <= 1'b0;
-      i_fxu_idu_conv_fma_vld <= '0;
+      i_fxu_idu_conv_fma_vld <= {`FXU_SUBMODULE_VLD_WIDTH{1'b0}};
     end
   endtask
 
@@ -309,11 +337,11 @@ module tb_sc_idu_to_fxu;
   task run_directed;
     begin
       $display("[TB] run_directed");
-      issue_fma_op(op_fadd_s, fp32(32'h3f800000), fp32(32'h40000000), '0, 5'd1);
+      issue_fma_op(op_fadd_s, fp32(32'h3f800000), fp32(32'h40000000), {`FXU_DATA_WIDTH{1'b0}}, 5'd1);
       drive_idle(20);
-      issue_fma_op(op_fsub_s, fp32(32'h40a00000), fp32(32'h40000000), '0, 5'd2);
+      issue_fma_op(op_fsub_s, fp32(32'h40a00000), fp32(32'h40000000), {`FXU_DATA_WIDTH{1'b0}}, 5'd2);
       drive_idle(20);
-      issue_fma_op(op_fmul_s, fp32(32'h3fc00000), fp32(32'h40000000), '0, 5'd3);
+      issue_fma_op(op_fmul_s, fp32(32'h3fc00000), fp32(32'h40000000), {`FXU_DATA_WIDTH{1'b0}}, 5'd3);
       drive_idle(200);
     end
   endtask
@@ -321,11 +349,11 @@ module tb_sc_idu_to_fxu;
   task run_compare;
     begin
       $display("[TB] run_compare");
-      issue_conv_op(op_feq_s, fp32(32'h3f800000), fp32(32'h3f800000), '0, 5'd4);
+      issue_conv_op(op_feq_s, fp32(32'h3f800000), fp32(32'h3f800000), {`FXU_DATA_WIDTH{1'b0}}, 5'd4);
       drive_idle(20);
-      issue_conv_op(op_flt_s, fp32(32'h3f800000), fp32(32'h40000000), '0, 5'd5);
+      issue_conv_op(op_flt_s, fp32(32'h3f800000), fp32(32'h40000000), {`FXU_DATA_WIDTH{1'b0}}, 5'd5);
       drive_idle(20);
-      issue_conv_op(op_fle_s, fp32(32'h40000000), fp32(32'h40000000), '0, 5'd6);
+      issue_conv_op(op_fle_s, fp32(32'h40000000), fp32(32'h40000000), {`FXU_DATA_WIDTH{1'b0}}, 5'd6);
       drive_idle(200);
     end
   endtask
@@ -354,9 +382,9 @@ module tb_sc_idu_to_fxu;
         lfsr2 = next_lfsr(lfsr);
 
         if (lfsr[2:0] <= 3'd2) begin
-          issue_fma_op(opcd, fp32({1'b0, lfsr[30:0]}), fp32({1'b0, lfsr2[30:0]}), '0, i[4:0]);
+          issue_fma_op(opcd, fp32({1'b0, lfsr[30:0]}), fp32({1'b0, lfsr2[30:0]}), {`FXU_DATA_WIDTH{1'b0}}, i[4:0]);
         end else begin
-          issue_conv_op(opcd, fp32({1'b0, lfsr[30:0]}), fp32({1'b0, lfsr2[30:0]}), '0, i[4:0]);
+          issue_conv_op(opcd, fp32({1'b0, lfsr[30:0]}), fp32({1'b0, lfsr2[30:0]}), {`FXU_DATA_WIDTH{1'b0}}, i[4:0]);
         end
 
         if ((i % 1000) == 0) begin
@@ -404,7 +432,7 @@ module tb_sc_idu_to_fxu;
   function [`FXU_DATA_WIDTH-1:0] fp32;
     input [31:0] value;
     begin
-      fp32 = '0;
+      fp32 = {`FXU_DATA_WIDTH{1'b0}};
       fp32[31:0] = value;
     end
   endfunction

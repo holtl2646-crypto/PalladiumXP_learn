@@ -17,7 +17,11 @@ Copy these files into the PXP case directory:
 
 ## 1. Fill opcode mapping
 
-Edit:
+The testbench now contains safe default opcode placeholders, so `+case=smoke` can compile without `tb_fxu_opcode_map.svh`.
+
+For real directed/stress runs, either edit `tb_sc_idu_to_fxu.sv` near the top or use runtime plusargs.
+
+Optional mapping file:
 
 ```text
 tb_fxu_opcode_map.svh
@@ -45,6 +49,17 @@ Or pass runtime override plusargs:
 
 ```bash
 RUN_ARGS="+case=directed +tb_op_fadd_s=... +tb_op_fsub_s=... +tb_op_fmul_s=..." ./run_sw.sh
+```
+
+## Known old-irun compatibility fixes
+
+Cadence irun 13.10 may reject some newer SystemVerilog testbench style. This generated testbench avoids:
+
+```text
+string variables
+void'(...) casts
+$fatal outside assertions
+mandatory external opcode include files
 ```
 
 ## 2. Run smoke test
