@@ -1,6 +1,6 @@
 ﻿# PalladiumXP (PXP) project memory
 
-Last updated: 2026-06-03
+Last updated: 2026-06-07
 
 ## Project context
 
@@ -90,6 +90,8 @@ run_sw.sh
 run_hw.sh
 run_sw_legacy.sh
 run_hw_legacy.sh
+run_pxp_legacy.sh
+run_pxp_stress_matrix.sh
 tb_sc_idu_to_fxu_smoke.v
 tb_sc_idu_to_fxu_legacy.v
 tb_sc_idu_to_fxu.sv
@@ -268,3 +270,367 @@ Speedup:
 ```text
 SW real / HW real
 ```
+
+## Runtime measurement notes
+
+- Legacy stress now suppresses per-writeback `FRF_WB` / `XRF_WB` logs by default.
+- Directed still prints writebacks for debug and exact result confirmation.
+- Use `+verbose_wb` in `RUN_ARGS` if detailed writeback logs are needed during stress.
+- This avoids timing results being dominated by `$display`, `tee`, and log-file I/O.
+
+## PXP SA hardware acceleration bring-up, 2026-06-07
+
+Important correction:
+
+- `run_hw_legacy.sh` with plain `irun -R` can compile through IXCOM/UXE, but it does not by itself prove that the DUT is running on PalladiumXP.
+- True PXP SA execution requires an explicit hot swap command:
+
+```text
+xc on -run -xt0
+```
+
+Evidence of true hardware execution:
+
+```text
+Starting swap into the emulator.
+Finished swap into the emulator.
+--- HW execs swapin in ...
+--- HW execs ... evals ... in ... sec
+```
+
+`test_server` must show a real design on a domain during the run, for example:
+
+```text
+Domain 0  Owner lih  PID acc_eth1:<pid>  Design SA:tb_sc_idu_to_
+```
+
+If `test_server` only shows `RESERVED*`, the domain is reserved but the design has not been downloaded/running yet.
+
+### Required PXP/UXE environment and files
+
+Observed tool paths:
+
+```text
+irun  = /home/cadence/tools/INCISIV131010/tools/bin/64bit/irun
+ixcom = /home/cadence/tools/UXE141/tools.lnx86/bin/ixcom
+ixcc  = /home/cadence/tools/UXE141/tools.lnx86/bin/ixcc
+```
+
+Observed environment:
+
+```bash
+AXIS_HOME=/home/cadence/tools/UXE141/tools.lnx86
+UXEHOME=/home/cadence/tools/UXE141
+IESHOME=/home/cadence/tools/INCISIV131010
+```
+
+Useful runtime settings:
+
+```bash
+export DBE_HOST=acc
+```
+
+The IXCOM hardware database top generated in `dbFiles` is:
+
+```text
+xcva_top
+```
+
+Important generated files:
+
+```text
+.design
+dbFiles/xcva_top.proto
+dbFiles/xcva_top.et3confg
+xc_work/
+xc_ncwork/
+```
+
+If `.design` is missing, `xeDebug` fails with:
+
+```text
+ERROR (legacy-50795): Failed to read file ./.design
+```
+
+This can happen after running software scripts because `run_sw.sh` cleans old simulator/PXP outputs. Restore by rerunning the hardware compile/elaborate flow, for example:
+
+```bash
+RUN_ARGS="+case=stress +num_ops=1000 +seed=1" ./run_hw_legacy.sh
+```
+
+### Correct manual PXP SA run sequence
+
+Reserve a domain:
+
+```bash
+echo "0.0" > xcva_top.bp
+test_server xcva_top -reserve -timeout 300s
+```
+
+The reserve command returns a key, usually `34` in current tests:
+
+```text
+Emulator domains reserved with key 34 for 18000 seconds.
+Reserved resources (boards/domains) are: 0.0
+```
+
+Then run:
+
+```bash
+irun -R +case=stress +num_ops=1000000 +seed=1 -xedebug
+```
+
+At the `XE>` prompt:
+
+```text
+xeset reserveKey 34
+run 1ns
+xc status
+xc on -run -xt0
+xc status
+host -location
+run 20ms
+xc status
+exit
+```
+
+Notes:
+
+- `run 1ns` is a short software pre-run so the testbench initial block starts.
+- `xc on -run` alone failed with `Back to SIM: found x values`.
+- `xc on -run -xt0` succeeded. A/B tests showed `-xt0` is the key requirement, not `run 200ns`.
+- `download` is not a valid manual command in this IXCOM SA mode. Download happens implicitly during `xc on`.
+- `host -location` reports `NO_DOWNLOAD` before swap/download, and reports `0.0` after successful hardware setup.
+
+### Common issues found
+
+10M stress timeout:
+
+- `10M` stress initially failed on both SW and PXP with:
+
+```text
+[TB_LEGACY][ERROR] timeout
+```
+
+- Cause: legacy testbench timeout was `TIMEOUT_CYCLES = 10000000`, while `10M` operations plus reset/flush exceed that limit.
+- Local `tb_sc_idu_to_fxu_legacy.v` was updated to:
+
+```verilog
+parameter TIMEOUT_CYCLES = 20000000;
+```
+
+After copying this file to PXP, rerun hardware compile/elaborate before rerunning `10M`.
+
+Wrong top name for `test_server`:
+
+```bash
+test_server tb_sc_idu_to_fxu_legacy -location
+```
+
+fails because the hardware database top is `xcva_top`, not the testbench module. Correct command:
+
+```bash
+test_server xcva_top -location -sahost acc
+```
+
+Reservation cleanup:
+
+```bash
+test_server -rmkey 34
+```
+
+Do not use:
+
+```bash
+test_server xcva_top -rmkey 34
+```
+
+that syntax is invalid.
+
+Duplicate `.bp` files:
+
+- Keep `./xcva_top.bp`.
+- Remove `dbFiles/xcva_top.bp` to avoid the warning that the current-directory `.bp` overrides the other one.
+
+`xeDebug -key` does not work:
+
+```text
+Option -key is not supported yet and successfully ignored.
+```
+
+Use:
+
+```text
+xeset reserveKey <key>
+```
+
+before `xc on -run -xt0`.
+
+### Automation scripts
+
+`run_pxp_legacy.sh`:
+
+- Reserves `xcva_top`.
+- Writes `xcva_top.bp`.
+- Parses the reserve key.
+- Generates an xeDebug command script.
+- Runs:
+
+```text
+xeset reserveKey <key>
+run <PRE_RUN_TIME>
+xc on -run -xt0
+run <HW_RUN_TIME>
+```
+
+Default usage:
+
+```bash
+chmod +x run_pxp_legacy.sh
+./run_pxp_legacy.sh
+```
+
+Useful overrides:
+
+```bash
+PRE_RUN_TIME=1ns USE_XT0=1 NUM_OPS=1000000 HW_RUN_TIME=20ms ./run_pxp_legacy.sh
+NUM_OPS=10000000 HW_RUN_TIME=200ms ./run_pxp_legacy.sh
+```
+
+`run_pxp_stress_matrix.sh`:
+
+- Runs a matrix of PXP hardware tests first.
+- Then runs SW tests.
+- This order matters because SW scripts clean `.design`; running SW first breaks PXP runs.
+- Writes results to:
+
+```text
+pxp_stress_results/summary.tsv
+```
+
+Default matrix:
+
+```text
+1M:1000000:20ms 5M:5000000:100ms 10M:10000000:200ms
+```
+
+Recommended first run:
+
+```bash
+MATRIX="1M:1000000:20ms 5M:5000000:100ms" ./run_pxp_stress_matrix.sh
+```
+
+### Performance results
+
+Validated stress matrix:
+
+```text
+label  num_ops   sw_real_s  pxp_real_s  hw_exec_s  end_to_end_speedup  sw_to_hw_exec_ratio  status
+1M     1000000   281.85     133.67      38.17      2.109               7.384                PASS
+5M     5000000   922.95     282.66      187.13     3.265               4.932                PASS
+10M    10000000  1727.26    472.05      376.62     3.659               4.586                PASS
+```
+
+Definitions:
+
+- `sw_real_s`: pure software `irun/ncsim` wall-clock runtime.
+- `pxp_real_s`: end-to-end PXP runtime, including reserve, xeDebug startup, host connection, swap-in, hardware execution, and exit/cleanup.
+- `hw_exec_s`: the hardware execution portion reported by `--- HW execs ... in ... sec`.
+- `end_to_end_speedup = sw_real_s / pxp_real_s`; use this as the main report metric.
+- `sw_to_hw_exec_ratio = sw_real_s / hw_exec_s`; useful to show hardware execution potential, but not a strict end-to-end comparison.
+
+Current conclusion:
+
+- True PXP hardware acceleration is working.
+- `1M` stress gets about `2.11x` end-to-end speedup.
+- `5M` stress gets about `3.27x` end-to-end speedup.
+- `10M` stress gets about `3.66x` end-to-end speedup.
+- Larger workloads better amortize reserve/xeDebug/swap overhead.
+
+### Cycle/s estimates
+
+Assumptions:
+
+```text
+CLK_PERIOD_NS = 10
+cycles ~= simulation_time_ns / 10
+```
+
+For `1M` stress:
+
+```text
+simulation_time = 10020195 ns
+cycles ~= 1,002,019
+SW real = 281.85s
+PXP HW exec = 38.17s
+```
+
+Estimated rates:
+
+```text
+SW ~= 1,002,019 / 281.85 ~= 3.56K cycles/s
+PXP HW exec ~= 1,002,019 / 38.17 ~= 26.25K cycles/s
+```
+
+For `5M` stress:
+
+```text
+cycles ~= 5,002,019
+SW real = 922.95s
+PXP HW exec = 187.13s
+```
+
+Estimated rates:
+
+```text
+SW ~= 5.42K cycles/s
+PXP HW exec ~= 26.73K cycles/s
+```
+
+For `10M` stress:
+
+```text
+cycles ~= 10,002,019
+SW real = 1727.26s
+PXP HW exec = 376.62s
+```
+
+Estimated rates:
+
+```text
+SW ~= 5.79K cycles/s
+PXP HW exec ~= 26.56K cycles/s
+```
+
+Interpretation:
+
+- Current pure software simulation is roughly `3.5K-5.8K cycles/s`.
+- Current PXP hardware execution segment is roughly `26K-27K cycles/s`.
+- PXP execution speed is stable across 1M/5M/10M.
+- This is below the compiler-reported emulator maximum speed:
+
+```text
+INFO (qt2dadb-1086): Maximum emulator operating speed is 3378 kHz.
+```
+
+Reason:
+
+- This is IXCOM SA, not full testbench-on-hardware emulation.
+- `sc_idu_to_fxu` is on hardware, but the Verilog testbench remains in software.
+- The testbench drives one operation per cycle, causing frequent host/PXP synchronization.
+- Example log from `1M`:
+
+```text
+--- HW execs 2002000 evals ... 2002000 tbsyncs ...
+--- HW execs 52646856 input events
+--- HW execs 3568441 output events
+```
+
+So the measured PXP rate is dominated by SA boundary synchronization and event traffic, not the PalladiumXP silicon limit.
+
+Visibility/debug impact:
+
+- Runtime speed depends on visibility mode and probes.
+- Current runs use DYNP through `xc on -run -xt0`.
+- FullVision, more probes, waveform upload, assertion counters, and larger trace visibility can reduce speed and increase capacity/step-count overhead.
+- Keep visibility minimal for performance runs.

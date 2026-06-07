@@ -26,7 +26,7 @@
 module tb_sc_idu_to_fxu_legacy;
 
   parameter CLK_PERIOD_NS = 10;
-  parameter TIMEOUT_CYCLES = 10000000;
+  parameter TIMEOUT_CYCLES = 20000000;
 
   reg i_clk;
   reg i_reset_n;
@@ -78,6 +78,7 @@ module tb_sc_idu_to_fxu_legacy;
   integer plusarg_found;
   integer dump_vcd;
   integer verbose_issue;
+  integer verbose_wb;
   integer stress_progress_interval;
   reg [8*32-1:0] case_name;
   reg [31:0] lfsr;
@@ -143,6 +144,7 @@ module tb_sc_idu_to_fxu_legacy;
     case_name = "directed";
     dump_vcd = 0;
     verbose_issue = 0;
+    verbose_wb = 0;
     stress_progress_interval = 0;
 
     plusarg_found = $value$plusargs("case=%s", case_name);
@@ -151,6 +153,7 @@ module tb_sc_idu_to_fxu_legacy;
     plusarg_found = $value$plusargs("progress=%d", stress_progress_interval);
     dump_vcd = $test$plusargs("dump_vcd");
     verbose_issue = $test$plusargs("verbose_issue");
+    verbose_wb = $test$plusargs("verbose_wb");
 
     if (dump_vcd) begin
       $dumpfile("tb_sc_idu_to_fxu_legacy.vcd");
@@ -342,8 +345,10 @@ module tb_sc_idu_to_fxu_legacy;
     if (i_reset_n) begin
       if (o_fxu_frf_we) begin
         frf_wb_count = frf_wb_count + 1;
-        $display("[TB_LEGACY][FRF_WB] waddr=%0d wdata=0x%0h fflags_we=%0b fflags=0x%0h",
-                 o_fxu_frf_waddr, o_fxu_frf_wdata, o_fxu_csr_fflags_we, o_fxu_csr_fflags);
+        if (case_name == "directed" || verbose_wb) begin
+          $display("[TB_LEGACY][FRF_WB] waddr=%0d wdata=0x%0h fflags_we=%0b fflags=0x%0h",
+                   o_fxu_frf_waddr, o_fxu_frf_wdata, o_fxu_csr_fflags_we, o_fxu_csr_fflags);
+        end
         if (case_name == "directed") begin
           if (frf_wb_count == 1 && o_fxu_frf_waddr !== 5'd1) begin
             $display("[TB_LEGACY][ERROR] first directed writeback expected waddr=1, got %0d", o_fxu_frf_waddr);
@@ -366,7 +371,9 @@ module tb_sc_idu_to_fxu_legacy;
       end
       if (o_fxu_xrf_we_wb) begin
         xrf_wb_count = xrf_wb_count + 1;
-        $display("[TB_LEGACY][XRF_WB] waddr=%0d wdata=0x%0h", o_fxu_xrf_waddr_wb, o_fxu_xrf_wdata_wb);
+        if (case_name == "directed" || verbose_wb) begin
+          $display("[TB_LEGACY][XRF_WB] waddr=%0d wdata=0x%0h", o_fxu_xrf_waddr_wb, o_fxu_xrf_wdata_wb);
+        end
       end
       if (o_fxu_csr_fflags_we) begin
         csr_fflags_count = csr_fflags_count + 1;

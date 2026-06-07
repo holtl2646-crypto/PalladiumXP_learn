@@ -130,6 +130,14 @@ RUN_ARGS="+case=stress +num_ops=1000000 +seed=1 +timeout_cycles=10000000" ./run_
 RUN_ARGS="+case=stress +num_ops=1000000 +seed=1 +timeout_cycles=10000000" ./run_hw.sh
 ```
 
+The legacy stress test suppresses per-transaction writeback logs by default so
+runtime measurements are not dominated by `$display` and log-file I/O. To restore
+detailed writeback logging for debug, add:
+
+```bash
+RUN_ARGS="+case=stress +num_ops=1000000 +seed=1 +verbose_wb" ./run_sw_legacy.sh
+```
+
 ## 6. Compare runtime
 
 ```bash
