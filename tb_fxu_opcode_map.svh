@@ -1,4 +1,4 @@
-﻿// Fill these values from springcore_pkg.v or the FXU decode table.
+// Fill these values from springcore_pkg.v or the FXU decode table.
 // They can also be overridden at runtime with plusargs, for example:
 //   +tb_op_fadd_s=0x01 +tb_op_fsub_s=0x02 +tb_op_fmul_s=0x03
 

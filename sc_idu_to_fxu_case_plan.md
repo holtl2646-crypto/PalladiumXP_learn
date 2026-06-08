@@ -1,4 +1,4 @@
-﻿# sc_idu_to_fxu testcase plan
+# sc_idu_to_fxu testcase plan
 
 Target top:
 

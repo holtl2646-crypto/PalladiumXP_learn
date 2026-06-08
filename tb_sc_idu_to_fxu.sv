@@ -1,4 +1,4 @@
-﻿`timescale 1ns/1ps
+`timescale 1ns/1ps
 `include "springcore_pkg.v"
 
 // Default opcode placeholders. Override them with plusargs such as:

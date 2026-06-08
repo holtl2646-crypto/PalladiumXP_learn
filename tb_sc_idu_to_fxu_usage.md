@@ -1,4 +1,4 @@
-﻿# tb_sc_idu_to_fxu usage
+# tb_sc_idu_to_fxu usage
 
 Generated files:
 

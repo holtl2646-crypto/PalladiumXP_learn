@@ -1,4 +1,4 @@
-﻿# PalladiumXP (PXP) remote access through jump server
+# PalladiumXP (PXP) remote access through jump server
 
 Current network path:
 

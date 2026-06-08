@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 set -o pipefail
 
 TOP="${TOP:-tb_sc_idu_to_fxu_smoke}"

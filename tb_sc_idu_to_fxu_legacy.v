@@ -1,4 +1,4 @@
-﻿`timescale 1ns/1ps
+`timescale 1ns/1ps
 `include "springcore_pkg.v"
 
 `ifndef TB_OP_FADD_S

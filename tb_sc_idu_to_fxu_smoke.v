@@ -1,4 +1,4 @@
-﻿`timescale 1ns/1ps
+`timescale 1ns/1ps
 `include "springcore_pkg.v"
 
 module tb_sc_idu_to_fxu_smoke;

@@ -1,4 +1,4 @@
-﻿# PalladiumXP (PXP) project memory
+# PalladiumXP (PXP) project memory
 
 Last updated: 2026-06-07
 

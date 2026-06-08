@@ -1,4 +1,4 @@
-﻿param(
+param(
     [string]$GatewayHost = "<jump-host>",
     [string]$PxpHost = "<pxp-host>",
     [string]$GatewayUser,
